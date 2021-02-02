@@ -7,6 +7,7 @@ import uuid
 import warnings
 from collections import OrderedDict
 from pprint import pprint
+import functools
 
 import gym
 import numpy as np
@@ -18,7 +19,7 @@ from stable_baselines3.common.noise import NormalActionNoise, OrnsteinUhlenbeckA
 from stable_baselines3.common.preprocessing import is_image_space
 from stable_baselines3.common.sb2_compat.rmsprop_tf_like import RMSpropTFLike  # noqa: F401
 from stable_baselines3.common.utils import constant_fn, set_random_seed
-from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack, VecNormalize, VecTransposeImage
+from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack, VecNormalize, VecTransposeImage, SubprocVecEnv
 from stable_baselines3.common.vec_env.obs_dict_wrapper import ObsDictWrapper
 
 # For custom activation fn
@@ -267,14 +268,23 @@ if __name__ == "__main__":  # noqa: C901
                 [make_env(env_id, 0, args.seed, wrapper_class=env_wrapper, log_dir=log_dir, env_kwargs=env_kwargs)]
             )
         else:
+            gym_packages = args.gym_packages
+
+            def _make_env(*args, **kwargs):
+                for env_module in gym_packages:
+                    importlib.import_module(env_module)
+                print(env_module)
+                return make_env(*args, **kwargs)
             # env = SubprocVecEnv([make_env(env_id, i, args.seed) for i in range(n_envs)])
             # On most env, SubprocVecEnv does not help and is quite memory hungry
-            env = DummyVecEnv(
-                [
-                    make_env(env_id, i, args.seed, log_dir=log_dir, env_kwargs=env_kwargs, wrapper_class=env_wrapper)
-                    for i in range(n_envs)
-                ]
-            )
+            env = SubprocVecEnv([functools.partial(_make_env, env_id, i, args.seed, log_dir=log_dir,
+                                                   env_kwargs=env_kwargs, wrapper_class=env_wrapper) for i in range(n_envs)])
+            # env = DummyVecEnv(
+            #    [
+            #        _make_env(env_id, i, args.seed, log_dir=log_dir, env_kwargs=env_kwargs, wrapper_class=env_wrapper)
+            #        for i in range(n_envs)
+            #    ]
+            # )
 
         # Pretrained model, load normalization
         path_ = os.path.join(os.path.dirname(args.trained_agent), args.env)

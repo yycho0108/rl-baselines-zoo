@@ -6,6 +6,7 @@ import gym
 import numpy as np
 import torch as th
 import yaml
+import time
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.vec_env import DummyVecEnv, VecEnv, VecEnvWrapper
 
@@ -151,6 +152,8 @@ def main():  # noqa: C901
     ep_len = 0
     # For HER, monitor success rate
     successes = []
+    t0 = time.time()
+    dt = 0.0
     for _ in range(args.n_timesteps):
         action, state = model.predict(obs, state=state, deterministic=deterministic)
         # Random Agent
@@ -158,6 +161,15 @@ def main():  # noqa: C901
         # Clip Action to avoid out of bound errors
         if isinstance(env.action_space, gym.spaces.Box):
             action = np.clip(action, env.action_space.low, env.action_space.high)
+
+        # NOTE(ycho): HACK to be approximately real time... rather than being too fast
+        if True:
+            t1 = time.time()
+            dt_real = 0.25 * (t1 - t0)
+            dt += env.envs[0].timestep
+            if dt_real < dt:
+                time.sleep(dt - dt_real)
+            # print('{} vs {}'.format(dt, dt_real))
         obs, reward, done, infos = env.step(action)
         if not args.no_render:
             env.render("human")
